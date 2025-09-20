@@ -1,4 +1,4 @@
-// Divine Thread Pool Module Script (Persistent Chat, GM Reset, Harmony in Dark Blue)
+// Divine Thread Pool Module Script (All players can draw, GM-only reset, pool sync via socket)
 const MODULE_ID = "divine-thread-pool";
 
 const harmonyFlavors = [
@@ -38,7 +38,6 @@ async function showPool() {
   let harmony = pool.filter(p => p === "Harmony").length;
   let discord = pool.filter(p => p === "Discord").length;
 
-  // Only show Reset button if current user has GM role
   let dmResetButton = game.user.isGM
     ? `<button data-reset="true" class="divine-thread-reset-btn" style="margin-left:12px;">Reset Pool (5/5)</button>`
     : "";
@@ -49,30 +48,27 @@ async function showPool() {
       <p style="margin:6px 0;font-weight:600;">✨ Harmony Threads: <span style="color:#00008B;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span>${dmResetButton}</p>
       <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">
         <button data-draw="any" class="divine-thread-btn">Draw Divine Thread</button>
+        ${game.user.isGM ? '<button data-update="true" class="divine-thread-update-btn">Update Pool</button>' : ''}
       </div>
       <div style="margin-top:8px;font-size:0.85em;color:var(--text-muted);">Click the button to draw a random Divine Thread from the pool.</div>
     </div>
   `;
 
-  // Update existing chat message or create new
   if (poolMessageId) {
     let msg = game.messages.get(poolMessageId);
-    if (msg) {
-      // Rebuild content to show Reset button if current user is GM
-      msg.update({ content });
-    } else {
+    if (msg) msg.update({ content });
+    else {
       let chatMsg = await ChatMessage.create({ content });
       poolMessageId = chatMsg.id;
     }
   } else {
-    // If no pool message exists, create new one
     let chatMsg = await ChatMessage.create({ content });
     poolMessageId = chatMsg.id;
   }
 }
 
-// Draw a thread
-async function drawThread() {
+// GM handles actual draw and broadcasts result
+async function drawThreadGM() {
   let pool = game.settings.get(MODULE_ID, "threadPool") || [];
   if (pool.length === 0) {
     ui.notifications.warn("The Divine Thread Pool is empty!");
@@ -82,33 +78,51 @@ async function drawThread() {
   let idx = Math.floor(Math.random() * pool.length);
   let drawn = pool[idx];
 
-  // Replace drawn thread with new random thread
+  // Replace drawn thread with a new random one
   pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
   await game.settings.set(MODULE_ID, "threadPool", pool);
 
   let flavor = drawn === "Harmony" ? randomFlavor("Harmony") : randomFlavor("Discord");
-  ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
 
+  ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
   showPool();
 }
 
-// Reset pool to 5 Harmony / 5 Discord (GM only)
+// Request GM to handle draw
+function drawThread() {
+  if (!game.user.isGM) {
+    game.socket.emit(`module.${MODULE_ID}`, { type: "draw" });
+  } else {
+    drawThreadGM();
+  }
+}
+
+// GM resets the pool
 async function resetPool() {
   if (!game.user.isGM) return;
   await initPool();
   ChatMessage.create({ content: "♻️ The Divine Thread Pool has been reset to 5 Harmony / 5 Discord threads by the GM." });
 }
 
+// Force update of pool display (GM only)
+function updatePool() {
+  if (!game.user.isGM) return;
+  showPool();
+}
+
+// Socket listener for player draws
+Hooks.once("ready", () => {
+  game.socket.on(`module.${MODULE_ID}`, async data => {
+    if (!game.user.isGM) return;
+    if (data.type === "draw") await drawThreadGM();
+  });
+});
+
 // Listen for chat button clicks
 Hooks.on("renderChatMessage", (message, html) => {
-  html.find("button[data-draw='any']").click(async ev => {
-    ev.preventDefault();
-    await drawThread();
-  });
-  html.find("button[data-reset='true']").click(async ev => {
-    ev.preventDefault();
-    await resetPool();
-  });
+  html.find("button[data-draw='any']").click(ev => { ev.preventDefault(); drawThread(); });
+  html.find("button[data-reset='true']").click(ev => { ev.preventDefault(); resetPool(); });
+  html.find("button[data-update='true']").click(ev => { ev.preventDefault(); updatePool(); });
 });
 
 // Register pool setting
@@ -122,10 +136,11 @@ Hooks.once("init", () => {
   });
 });
 
-// Export functions globally for macros
+// Export globally
 window.DivineThreadPool = {
   initPool,
   showPool,
   drawThread,
-  resetPool
+  resetPool,
+  updatePool
 };
