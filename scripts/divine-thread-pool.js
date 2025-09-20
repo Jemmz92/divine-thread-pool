@@ -43,7 +43,7 @@ window.DivineThreadPool = {
     }
   },
 
-  // Draw a thread (any player)
+  // Draw a thread (GM executes this)
   drawThread: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 5, Discord: 5 };
     const totalThreads = pool.Harmony + pool.Discord;
@@ -132,9 +132,27 @@ Hooks.once("init", () => {
 
 // Button click handlers
 Hooks.on("renderChatMessage", (msg, html) => {
-  html.find(".divine-thread-draw-btn").click(() => window.DivineThreadPool.drawThread());
+  // Socket-based draw for players
+  html.find(".divine-thread-draw-btn").click(async () => {
+    if (!game.user.isGM) {
+      game.socket.emit("module.divine-thread-pool", { type: "drawThread", userId: game.user.id });
+    } else {
+      window.DivineThreadPool.drawThread();
+    }
+  });
+
+  // GM manual adjustments
   html.find(".h-plus").click(() => window.DivineThreadPool.adjustThread("Harmony", 1));
   html.find(".h-minus").click(() => window.DivineThreadPool.adjustThread("Harmony", -1));
   html.find(".d-plus").click(() => window.DivineThreadPool.adjustThread("Discord", 1));
   html.find(".d-minus").click(() => window.DivineThreadPool.adjustThread("Discord", -1));
 });
+
+// Socket listener (GM executes draws)
+if (game.user.isGM) {
+  game.socket.on("module.divine-thread-pool", async (data) => {
+    if (data.type === "drawThread") {
+      await window.DivineThreadPool.drawThread();
+    }
+  });
+}
