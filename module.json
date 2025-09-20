@@ -1,11 +1,11 @@
 {
   "id": "divine-thread-pool",
   "title": "Divine Thread Pool",
-  "description": "Implements the Divine Thread system for Averis — a living balance of Harmony and Discord Threads.",
-"version": "1.4.0",
+  "description": "Divine Thread Pool system for Averis — Harmony and Discord threads, persistent chat, GM reset, player draws.",
+  "version": "1.4.0",
   "authors": [
     {
-      "name": "ChatGPT",
+      "name": "Jemmz92",
       "discord": ""
     }
   ],
@@ -17,10 +17,6 @@
   "scripts": [
     "scripts/divine-thread-pool.js"
   ],
-  "esmodules": [],
-  "styles": [],
-  "packs": [],
-  "languages": [],
   "url": "https://github.com/Jemmz92/divine-thread-pool",
   "manifest": "https://raw.githubusercontent.com/Jemmz92/divine-thread-pool/main/module.json",
   "download": "https://github.com/Jemmz92/divine-thread-pool/archive/refs/heads/main.zip"
