@@ -2,15 +2,16 @@
 window.DivineThreadPool = {
   poolMessageId: null,
 
-  // Initialize pool
+  // Initialize the pool (5 Harmony / 5 Discord)
   initPool: async function() {
     if (!game.user.isGM) return;
+
     const pool = Array(5).fill("Harmony").concat(Array(5).fill("Discord"));
     await game.settings.set("divine-thread-pool", "threadPool", pool);
     await this.showPool();
   },
 
-  // Show persistent chat
+  // Show the persistent chat message
   showPool: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
     const harmony = pool.filter(t => t === "Harmony").length;
@@ -52,7 +53,7 @@ window.DivineThreadPool = {
     }
   },
 
-  // Draw thread
+  // Draw a thread
   drawThread: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
     if (pool.length === 0) {
@@ -60,20 +61,18 @@ window.DivineThreadPool = {
       return;
     }
 
-    // Random draw
     const idx = Math.floor(Math.random() * pool.length);
     const drawn = pool[idx];
 
-    // Replace with random new thread
+    // Replace with a random new thread
     pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
-
     await game.settings.set("divine-thread-pool", "threadPool", pool);
 
-    // Notify
-    const flavor = drawn === "Harmony" ? "Good fortune smiles upon you!" : "Beware, discord arises!";
-    ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
+    const flavor = drawn === "Harmony"
+      ? "Good fortune smiles upon you!"
+      : "Beware, discord arises!";
 
-    // Update chat
+    ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
     await this.showPool();
   },
 
@@ -85,15 +84,21 @@ window.DivineThreadPool = {
   }
 };
 
-// Hook to add button click listeners
-Hooks.on("renderChatMessage", (msg, html, data) => {
-  html.find(".divine-thread-draw-btn").click(() => {
-    window.DivineThreadPool.drawThread();
+// Register the game setting
+Hooks.once("init", () => {
+  game.settings.register("divine-thread-pool", "threadPool", {
+    name: "Divine Thread Pool",
+    hint: "Tracks the current Harmony and Discord threads.",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
   });
-  html.find(".divine-thread-reset-btn").click(() => {
-    window.DivineThreadPool.resetPool();
-  });
-  html.find(".divine-thread-update-btn").click(() => {
-    window.DivineThreadPool.showPool();
-  });
+});
+
+// Attach button click handlers
+Hooks.on("renderChatMessage", (msg, html) => {
+  html.find(".divine-thread-draw-btn").click(() => window.DivineThreadPool.drawThread());
+  html.find(".divine-thread-reset-btn").click(() => window.DivineThreadPool.resetPool());
+  html.find(".divine-thread-update-btn").click(() => window.DivineThreadPool.showPool());
 });
