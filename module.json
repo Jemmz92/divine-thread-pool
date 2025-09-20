@@ -2,7 +2,7 @@
   "id": "divine-thread-pool",
   "title": "Divine Thread Pool",
   "description": "Implements the Divine Thread system for Averis — a living balance of Harmony and Discord Threads.",
-  "version": "1.0.0",
+"version": "1.1.0",
   "authors": [
     {
       "name": "ChatGPT",
