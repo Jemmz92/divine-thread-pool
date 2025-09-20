@@ -2,16 +2,16 @@
 window.DivineThreadPool = {
   poolMessageId: null,
 
-  // Initialize the pool (5 Harmony / 5 Discord)
+  // Initialize the pool (GM only)
   initPool: async function() {
     if (!game.user.isGM) return;
-
     const pool = Array(5).fill("Harmony").concat(Array(5).fill("Discord"));
     await game.settings.set("divine-thread-pool", "threadPool", pool);
     await this.showPool();
+    ui.notifications.info("🌌 Divine Thread Pool initialized! Players can now draw threads.");
   },
 
-  // Show the persistent chat message
+  // Show persistent chat
   showPool: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
     const harmony = pool.filter(t => t === "Harmony").length;
@@ -40,20 +40,17 @@ window.DivineThreadPool = {
       </div>
     `;
 
-    if (this.poolMessageId) {
-      const msg = game.messages.get(this.poolMessageId);
-      if (msg) await msg.update({ content });
-      else {
-        const chatMsg = await ChatMessage.create({ content });
-        this.poolMessageId = chatMsg.id;
-      }
+    // Always fetch the latest message or create a new one
+    let msg = this.poolMessageId ? game.messages.get(this.poolMessageId) : null;
+    if (!msg) {
+      msg = await ChatMessage.create({ content });
+      this.poolMessageId = msg.id;
     } else {
-      const chatMsg = await ChatMessage.create({ content });
-      this.poolMessageId = chatMsg.id;
+      await msg.update({ content });
     }
   },
 
-  // Draw a thread
+  // Draw a thread (any player)
   drawThread: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
     if (pool.length === 0) {
@@ -64,13 +61,29 @@ window.DivineThreadPool = {
     const idx = Math.floor(Math.random() * pool.length);
     const drawn = pool[idx];
 
-    // Replace with a random new thread
+    // Replace with random new thread
     pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
     await game.settings.set("divine-thread-pool", "threadPool", pool);
 
+    // Flavor messages
+    const harmonyMessages = [
+      "Luminael smiles upon you, granting life and light.",
+      "Verdalis blesses your journey through the wilds.",
+      "Amaryth inspires joy and beauty around you.",
+      "Zerithia favors your ventures with good fortune.",
+      "Eryndra sparks innovation and progress in your path."
+    ];
+    const discordMessages = [
+      "Dravok's fury shakes the land around you.",
+      "Noctyra reminds you that all debts must be paid.",
+      "A sudden calamity shakes your surroundings.",
+      "Chance turns against you under Zerithia's watchful eye.",
+      "The shadows stir, and a misfortune approaches."
+    ];
+
     const flavor = drawn === "Harmony"
-      ? "Good fortune smiles upon you!"
-      : "Beware, discord arises!";
+      ? harmonyMessages[Math.floor(Math.random() * harmonyMessages.length)]
+      : discordMessages[Math.floor(Math.random() * discordMessages.length)];
 
     ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
     await this.showPool();
@@ -96,7 +109,7 @@ Hooks.once("init", () => {
   });
 });
 
-// Attach button click handlers
+// Button click handlers
 Hooks.on("renderChatMessage", (msg, html) => {
   html.find(".divine-thread-draw-btn").click(() => window.DivineThreadPool.drawThread());
   html.find(".divine-thread-reset-btn").click(() => window.DivineThreadPool.resetPool());
