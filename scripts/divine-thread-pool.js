@@ -1,6 +1,4 @@
-// Divine Thread Pool Module Script (Updated)
-// Everyone can draw, fully randomized threads, pool starts with 10 threads
-
+// Divine Thread Pool Module Script (Persistent Chat, GM Reset, Harmony in Dark Blue)
 const MODULE_ID = "divine-thread-pool";
 
 const harmonyFlavors = [
@@ -26,27 +24,29 @@ function randomFlavor(type) {
   return "🌗 The cosmos stirs in silence.";
 }
 
-// Initialize pool with N threads (default 10)
-async function initPool(size = 10) {
-  let pool = [];
-  for (let i = 0; i < size; i++) {
-    pool.push(Math.random() < 0.5 ? "Harmony" : "Discord");
-  }
+// Initialize pool with 5 Harmony and 5 Discord threads
+async function initPool() {
+  let pool = Array(5).fill("Harmony").concat(Array(5).fill("Discord"));
   await game.settings.set(MODULE_ID, "threadPool", pool);
-  ChatMessage.create({ content: `🌌 Divine Thread Pool initialized with ${size} threads.` });
   showPool();
 }
 
-// Show pool in chat with a "Draw Thread" button
+// Show pool in a single persistent chat message
+let poolMessageId = null;
 async function showPool() {
   let pool = game.settings.get(MODULE_ID, "threadPool") || [];
   let harmony = pool.filter(p => p === "Harmony").length;
   let discord = pool.filter(p => p === "Discord").length;
 
+  // Only show Reset button if current user has GM role
+  let dmResetButton = game.user.isGM
+    ? `<button data-reset="true" class="divine-thread-reset-btn" style="margin-left:12px;">Reset Pool (5/5)</button>`
+    : "";
+
   let content = `
     <div style="text-align:center;padding:6px;border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));">
       <h2 style="margin:4px 0;">🌌 Divine Thread Pool</h2>
-      <p style="margin:6px 0;font-weight:600;">✨ Harmony Threads: <span style="color:#9be7a3;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span></p>
+      <p style="margin:6px 0;font-weight:600;">✨ Harmony Threads: <span style="color:#00008B;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span>${dmResetButton}</p>
       <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">
         <button data-draw="any" class="divine-thread-btn">Draw Divine Thread</button>
       </div>
@@ -54,7 +54,21 @@ async function showPool() {
     </div>
   `;
 
-  ChatMessage.create({ content });
+  // Update existing chat message or create new
+  if (poolMessageId) {
+    let msg = game.messages.get(poolMessageId);
+    if (msg) {
+      // Rebuild content to show Reset button if current user is GM
+      msg.update({ content });
+    } else {
+      let chatMsg = await ChatMessage.create({ content });
+      poolMessageId = chatMsg.id;
+    }
+  } else {
+    // If no pool message exists, create new one
+    let chatMsg = await ChatMessage.create({ content });
+    poolMessageId = chatMsg.id;
+  }
 }
 
 // Draw a thread
@@ -72,11 +86,17 @@ async function drawThread() {
   pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
   await game.settings.set(MODULE_ID, "threadPool", pool);
 
-  // Show result in chat
   let flavor = drawn === "Harmony" ? randomFlavor("Harmony") : randomFlavor("Discord");
   ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
 
   showPool();
+}
+
+// Reset pool to 5 Harmony / 5 Discord (GM only)
+async function resetPool() {
+  if (!game.user.isGM) return;
+  await initPool();
+  ChatMessage.create({ content: "♻️ The Divine Thread Pool has been reset to 5 Harmony / 5 Discord threads by the GM." });
 }
 
 // Listen for chat button clicks
@@ -84,6 +104,10 @@ Hooks.on("renderChatMessage", (message, html) => {
   html.find("button[data-draw='any']").click(async ev => {
     ev.preventDefault();
     await drawThread();
+  });
+  html.find("button[data-reset='true']").click(async ev => {
+    ev.preventDefault();
+    await resetPool();
   });
 });
 
@@ -102,5 +126,6 @@ Hooks.once("init", () => {
 window.DivineThreadPool = {
   initPool,
   showPool,
-  drawThread
+  drawThread,
+  resetPool
 };
