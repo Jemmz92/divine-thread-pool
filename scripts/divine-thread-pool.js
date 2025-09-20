@@ -1,53 +1,43 @@
 // Namespace
 window.DivineThreadPool = {
-  poolMessageId: null,
-
-  // Initialize the pool (GM only)
+  // Initialize the pool
   initPool: async function() {
     if (!game.user.isGM) return;
-    const pool = Array(5).fill("Harmony").concat(Array(5).fill("Discord"));
-    await game.settings.set("divine-thread-pool", "threadPool", pool);
+
+    // Start with 5 Harmony and 5 Discord
+    const pool = { Harmony: 5, Discord: 5 };
+    await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
     await this.showPool();
     ui.notifications.info("🌌 Divine Thread Pool initialized! Players can now draw threads.");
   },
 
-  // Show persistent chat (recreates if missing or deleted)
+  // Show persistent chat
   showPool: async function() {
-    const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
-    const harmony = pool.filter(t => t === "Harmony").length;
-    const discord = pool.filter(t => t === "Discord").length;
-
-    const resetButton = game.user.isGM
-      ? `<button class="divine-thread-reset-btn" style="margin-left:12px;">Reset Pool (5/5)</button>`
-      : "";
-    const updateButton = game.user.isGM
-      ? `<button class="divine-thread-update-btn" style="margin-left:6px;">Update Pool</button>`
-      : "";
-
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    
     const content = `
       <div style="text-align:center; padding:6px; border:1px solid rgba(255,255,255,0.06); border-radius:6px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));">
         <h2 style="margin:4px 0;">🌌 Divine Thread Pool</h2>
         <p style="margin:6px 0; font-weight:600;">
-          ✨ Harmony Threads: <span style="color:#00008B;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span>
-          ${resetButton} ${updateButton}
+          ✨ Harmony Threads: <span style="color:#00008B;">${pool.Harmony}</span>
+          ${game.user.isGM ? `<button class="h-minus">-</button> <button class="h-plus">+</button>` : ""}
+          | 🔥 Discord Threads: <span style="color:#f39c9c;">${pool.Discord}</span>
+          ${game.user.isGM ? `<button class="d-minus">-</button> <button class="d-plus">+</button>` : ""}
         </p>
         <div style="display:flex; gap:8px; justify-content:center; margin-top:6px;">
           <button class="divine-thread-draw-btn">Draw Divine Thread</button>
         </div>
         <div style="margin-top:8px; font-size:0.85em; color:var(--text-muted);">
-          Click the button to draw a random Divine Thread from the pool.
+          Players click the button to draw a random Divine Thread.
+          GM can adjust counts manually using + and -.
         </div>
       </div>
     `;
 
-    // Always use GM-authored message for consistency
-    let msg = this.poolMessageId ? game.messages.get(this.poolMessageId) : null;
+    let msg = window.DivineThreadPool.poolMessageId ? game.messages.get(window.DivineThreadPool.poolMessageId) : null;
     if (!msg || !msg.isAuthor) {
-      msg = await ChatMessage.create({ 
-        content,
-        speaker: { alias: "Divine Thread Pool" }
-      });
-      this.poolMessageId = msg.id;
+      msg = await ChatMessage.create({ content, speaker: { alias: "Divine Thread Pool" } });
+      window.DivineThreadPool.poolMessageId = msg.id;
     } else {
       await msg.update({ content });
     }
@@ -55,19 +45,22 @@ window.DivineThreadPool = {
 
   // Draw a thread (any player)
   drawThread: async function() {
-    const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
-    if (pool.length === 0) {
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    const totalThreads = pool.Harmony + pool.Discord;
+    if (totalThreads <= 0) {
       ui.notifications.warn("The Divine Thread Pool is empty!");
       return;
     }
 
-    const idx = Math.floor(Math.random() * pool.length);
-    const drawn = pool[idx];
+    // Randomly choose Harmony or Discord based on current counts
+    const r = Math.random() * totalThreads;
+    const drawnType = r < pool.Harmony ? "Harmony" : "Discord";
 
-    // Replace drawn thread with a random new one
-    pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
-    await game.settings.set("divine-thread-pool", "threadPool", pool);
+    // Decrease the drawn count
+    pool[drawnType] = Math.max(0, pool[drawnType] - 1);
+    await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
 
+    // Flavor messages
     const harmonyMessages = [
       "Luminael smiles upon you, granting life and light.",
       "Verdalis blesses your journey through the wilds.",
@@ -83,41 +76,45 @@ window.DivineThreadPool = {
       "The shadows stir, and a misfortune approaches."
     ];
 
-    const flavor = drawn === "Harmony"
+    const flavor = drawnType === "Harmony"
       ? harmonyMessages[Math.floor(Math.random() * harmonyMessages.length)]
       : discordMessages[Math.floor(Math.random() * discordMessages.length)];
 
-    await ChatMessage.create({ 
-      content: `🎴 You drew a **${drawn} Thread**! ${flavor}`,
+    await ChatMessage.create({
+      content: `🎴 You drew a **${drawnType} Thread**! ${flavor}`,
       speaker: { alias: "Divine Thread Pool" }
     });
 
-    await this.showPool(); // Refresh persistent pool
+    await this.showPool();
   },
 
-  // Reset pool (GM only)
-  resetPool: async function() {
+  // GM adjusts the pool manually
+  adjustThread: async function(type, delta) {
     if (!game.user.isGM) return;
-    await this.initPool();
-    ui.notifications.info("🌌 Divine Thread Pool reset to 5/5.");
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    pool[type] = Math.max(0, pool[type] + delta);
+    await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
+    await this.showPool();
   }
 };
 
 // Register game setting
 Hooks.once("init", () => {
-  game.settings.register("divine-thread-pool", "threadPool", {
-    name: "Divine Thread Pool",
+  game.settings.register("divine-thread-pool", "threadPoolCounts", {
+    name: "Divine Thread Pool Counts",
     hint: "Tracks the current Harmony and Discord threads.",
     scope: "world",
     config: false,
-    type: Array,
-    default: []
+    type: Object,
+    default: { Harmony: 5, Discord: 5 }
   });
 });
 
 // Button click handlers
 Hooks.on("renderChatMessage", (msg, html) => {
   html.find(".divine-thread-draw-btn").click(() => window.DivineThreadPool.drawThread());
-  html.find(".divine-thread-reset-btn").click(() => window.DivineThreadPool.resetPool());
-  html.find(".divine-thread-update-btn").click(() => window.DivineThreadPool.showPool());
+  html.find(".h-plus").click(() => window.DivineThreadPool.adjustThread("Harmony", 1));
+  html.find(".h-minus").click(() => window.DivineThreadPool.adjustThread("Harmony", -1));
+  html.find(".d-plus").click(() => window.DivineThreadPool.adjustThread("Discord", 1));
+  html.find(".d-minus").click(() => window.DivineThreadPool.adjustThread("Discord", -1));
 });
