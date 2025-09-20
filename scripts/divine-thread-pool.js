@@ -1,94 +1,99 @@
-// Show pool in a single persistent chat message
-async function showPool() {
-  let pool = game.settings.get(MODULE_ID, "threadPool") || [];
-  let harmony = pool.filter(p => p === "Harmony").length;
-  let discord = pool.filter(p => p === "Discord").length;
+// Namespace
+window.DivineThreadPool = {
+  poolMessageId: null,
 
-  let dmResetButton = game.user.isGM
-    ? `<button data-reset="true" class="divine-thread-reset-btn" style="margin-left:12px;">Reset Pool (5/5)</button>`
-    : "";
+  // Initialize pool
+  initPool: async function() {
+    if (!game.user.isGM) return;
+    const pool = Array(5).fill("Harmony").concat(Array(5).fill("Discord"));
+    await game.settings.set("divine-thread-pool", "threadPool", pool);
+    await this.showPool();
+  },
 
-  let dmUpdateButton = game.user.isGM
-    ? `<button data-update="true" class="divine-thread-update-btn" style="margin-left:6px;">Update Pool</button>`
-    : "";
+  // Show persistent chat
+  showPool: async function() {
+    const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
+    const harmony = pool.filter(t => t === "Harmony").length;
+    const discord = pool.filter(t => t === "Discord").length;
 
-  let content = `
-    <div style="text-align:center;padding:6px;border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));">
-      <h2 style="margin:4px 0;">🌌 Divine Thread Pool</h2>
-      <p style="margin:6px 0;font-weight:600;">✨ Harmony Threads: <span style="color:#00008B;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span> ${dmResetButton} ${dmUpdateButton}</p>
-      <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">
-        <button data-draw="any" class="divine-thread-btn">Draw Divine Thread</button>
+    const resetButton = game.user.isGM
+      ? `<button class="divine-thread-reset-btn" style="margin-left:12px;">Reset Pool (5/5)</button>`
+      : "";
+    const updateButton = game.user.isGM
+      ? `<button class="divine-thread-update-btn" style="margin-left:6px;">Update Pool</button>`
+      : "";
+
+    const content = `
+      <div style="text-align:center; padding:6px; border:1px solid rgba(255,255,255,0.06); border-radius:6px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));">
+        <h2 style="margin:4px 0;">🌌 Divine Thread Pool</h2>
+        <p style="margin:6px 0; font-weight:600;">
+          ✨ Harmony Threads: <span style="color:#00008B;">${harmony}</span> | 🔥 Discord Threads: <span style="color:#f39c9c;">${discord}</span>
+          ${resetButton} ${updateButton}
+        </p>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:6px;">
+          <button class="divine-thread-draw-btn">Draw Divine Thread</button>
+        </div>
+        <div style="margin-top:8px; font-size:0.85em; color:var(--text-muted);">
+          Click the button to draw a random Divine Thread from the pool.
+        </div>
       </div>
-      <div style="margin-top:8px;font-size:0.85em;color:var(--text-muted);">Click the button to draw a random Divine Thread from the pool.</div>
-    </div>
-  `;
+    `;
 
-  if (poolMessageId) {
-    let msg = game.messages.get(poolMessageId);
-    if (msg) {
-      await msg.update({ content });
+    if (this.poolMessageId) {
+      const msg = game.messages.get(this.poolMessageId);
+      if (msg) await msg.update({ content });
+      else {
+        const chatMsg = await ChatMessage.create({ content });
+        this.poolMessageId = chatMsg.id;
+      }
     } else {
-      let chatMsg = await ChatMessage.create({ content });
-      poolMessageId = chatMsg.id;
+      const chatMsg = await ChatMessage.create({ content });
+      this.poolMessageId = chatMsg.id;
     }
-  } else {
-    let chatMsg = await ChatMessage.create({ content });
-    poolMessageId = chatMsg.id;
+  },
+
+  // Draw thread
+  drawThread: async function() {
+    const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
+    if (pool.length === 0) {
+      ui.notifications.warn("The Divine Thread Pool is empty!");
+      return;
+    }
+
+    // Random draw
+    const idx = Math.floor(Math.random() * pool.length);
+    const drawn = pool[idx];
+
+    // Replace with random new thread
+    pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
+
+    await game.settings.set("divine-thread-pool", "threadPool", pool);
+
+    // Notify
+    const flavor = drawn === "Harmony" ? "Good fortune smiles upon you!" : "Beware, discord arises!";
+    ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
+
+    // Update chat
+    await this.showPool();
+  },
+
+  // Reset pool (GM only)
+  resetPool: async function() {
+    if (!game.user.isGM) return;
+    await this.initPool();
+    ui.notifications.info("🌌 Divine Thread Pool reset to 5/5.");
   }
-}
+};
 
-// GM handles actual draw
-async function drawThreadGM() {
-  let pool = game.settings.get(MODULE_ID, "threadPool") || [];
-  if (pool.length === 0) {
-    ui.notifications.warn("The Divine Thread Pool is empty!");
-    return;
-  }
-
-  // Pick a random thread
-  let idx = Math.floor(Math.random() * pool.length);
-  let drawn = pool[idx];
-
-  // Replace drawn thread with a new random one
-  pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
-
-  // Save updated pool to settings
-  await game.settings.set(MODULE_ID, "threadPool", pool);
-
-  // Broadcast to all players (force them to update display)
-  game.socket.emit(`module.${MODULE_ID}`, { type: "updatePool" });
-
-  // Show flavor message
-  let flavor = drawn === "Harmony" ? randomFlavor("Harmony") : randomFlavor("Discord");
-  ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
-
-  // Update persistent pool message
-  showPool();
-}
-
-// Socket listener to sync pool for everyone
-Hooks.once("ready", () => {
-  game.socket.on(`module.${MODULE_ID}`, async data => {
-    if (data.type === "draw" && game.user.isGM) {
-      await drawThreadGM();
-    }
-    if (data.type === "updatePool") {
-      showPool();
-    }
+// Hook to add button click listeners
+Hooks.on("renderChatMessage", (msg, html, data) => {
+  html.find(".divine-thread-draw-btn").click(() => {
+    window.DivineThreadPool.drawThread();
+  });
+  html.find(".divine-thread-reset-btn").click(() => {
+    window.DivineThreadPool.resetPool();
+  });
+  html.find(".divine-thread-update-btn").click(() => {
+    window.DivineThreadPool.showPool();
   });
 });
-
-// Players request draw
-function drawThread() {
-  if (!game.user.isGM) {
-    game.socket.emit(`module.${MODULE_ID}`, { type: "draw" });
-  } else {
-    drawThreadGM();
-  }
-}
-
-// Update Pool button (GM only)
-function updatePool() {
-  if (!game.user.isGM) return;
-  showPool();
-}
