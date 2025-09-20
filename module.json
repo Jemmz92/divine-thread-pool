@@ -21,7 +21,7 @@
   "styles": [],
   "packs": [],
   "languages": [],
-  "url": "https://github.com/<Jemmz92>/divine-thread-pool",
-  "manifest": "https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/divine-thread-pool/main/module.json",
-  "download": "https://github.com/<Jemmz92>/divine-thread-pool/archive/refs/heads/main.zip"
+  "url": "https://github.com/Jemmz92/divine-thread-pool",
+  "manifest": "https://raw.githubusercontent.com/Jemmz92/divine-thread-pool/main/module.json",
+  "download": "https://github.com/Jemmz92/divine-thread-pool/archive/refs/heads/main.zip"
 }
