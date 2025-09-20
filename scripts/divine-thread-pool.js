@@ -11,7 +11,7 @@ window.DivineThreadPool = {
     ui.notifications.info("🌌 Divine Thread Pool initialized! Players can now draw threads.");
   },
 
-  // Show persistent chat
+  // Show persistent chat (recreates if missing or deleted)
   showPool: async function() {
     const pool = game.settings.get("divine-thread-pool", "threadPool") || [];
     const harmony = pool.filter(t => t === "Harmony").length;
@@ -40,10 +40,13 @@ window.DivineThreadPool = {
       </div>
     `;
 
-    // Always fetch the latest message or create a new one
+    // Always use GM-authored message for consistency
     let msg = this.poolMessageId ? game.messages.get(this.poolMessageId) : null;
-    if (!msg) {
-      msg = await ChatMessage.create({ content });
+    if (!msg || !msg.isAuthor) {
+      msg = await ChatMessage.create({ 
+        content,
+        speaker: { alias: "Divine Thread Pool" }
+      });
       this.poolMessageId = msg.id;
     } else {
       await msg.update({ content });
@@ -61,11 +64,10 @@ window.DivineThreadPool = {
     const idx = Math.floor(Math.random() * pool.length);
     const drawn = pool[idx];
 
-    // Replace with random new thread
+    // Replace drawn thread with a random new one
     pool[idx] = Math.random() < 0.5 ? "Harmony" : "Discord";
     await game.settings.set("divine-thread-pool", "threadPool", pool);
 
-    // Flavor messages
     const harmonyMessages = [
       "Luminael smiles upon you, granting life and light.",
       "Verdalis blesses your journey through the wilds.",
@@ -85,8 +87,12 @@ window.DivineThreadPool = {
       ? harmonyMessages[Math.floor(Math.random() * harmonyMessages.length)]
       : discordMessages[Math.floor(Math.random() * discordMessages.length)];
 
-    ChatMessage.create({ content: `🎴 You drew a **${drawn} Thread**! ${flavor}` });
-    await this.showPool();
+    await ChatMessage.create({ 
+      content: `🎴 You drew a **${drawn} Thread**! ${flavor}`,
+      speaker: { alias: "Divine Thread Pool" }
+    });
+
+    await this.showPool(); // Refresh persistent pool
   },
 
   // Reset pool (GM only)
@@ -97,7 +103,7 @@ window.DivineThreadPool = {
   }
 };
 
-// Register the game setting
+// Register game setting
 Hooks.once("init", () => {
   game.settings.register("divine-thread-pool", "threadPool", {
     name: "Divine Thread Pool",
