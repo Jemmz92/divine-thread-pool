@@ -4,7 +4,7 @@ window.DivineThreadPool = {
   initPool: async function() {
     if (!game.user.isGM) return;
 
-    // Start with 5 Harmony and 5 Discord
+    // Start with 5 Harmony and 5 Discord (total 10)
     const pool = { Harmony: 5, Discord: 5 };
     await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
     await this.showPool();
@@ -13,7 +13,7 @@ window.DivineThreadPool = {
 
   // Show persistent chat
   showPool: async function() {
-    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 5, Discord: 5 };
     
     const content = `
       <div style="text-align:center; padding:6px; border:1px solid rgba(255,255,255,0.06); border-radius:6px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));">
@@ -29,7 +29,7 @@ window.DivineThreadPool = {
         </div>
         <div style="margin-top:8px; font-size:0.85em; color:var(--text-muted);">
           Players click the button to draw a random Divine Thread.
-          GM can adjust counts manually using + and -.
+          GM can adjust counts manually using + and - (total always 10).
         </div>
       </div>
     `;
@@ -45,7 +45,7 @@ window.DivineThreadPool = {
 
   // Draw a thread (any player)
   drawThread: async function() {
-    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 5, Discord: 5 };
     const totalThreads = pool.Harmony + pool.Discord;
     if (totalThreads <= 0) {
       ui.notifications.warn("The Divine Thread Pool is empty!");
@@ -58,6 +58,14 @@ window.DivineThreadPool = {
 
     // Decrease the drawn count
     pool[drawnType] = Math.max(0, pool[drawnType] - 1);
+
+    // Ensure total stays at 10 by increasing the other type if needed
+    const otherType = drawnType === "Harmony" ? "Discord" : "Harmony";
+    const total = pool.Harmony + pool.Discord;
+    if (total < 10) {
+      pool[otherType] += 10 - total;
+    }
+
     await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
 
     // Flavor messages
@@ -88,11 +96,23 @@ window.DivineThreadPool = {
     await this.showPool();
   },
 
-  // GM adjusts the pool manually
+  // GM adjusts the pool manually, keeping total 10
   adjustThread: async function(type, delta) {
     if (!game.user.isGM) return;
-    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 0, Discord: 0 };
+    const pool = game.settings.get("divine-thread-pool", "threadPoolCounts") || { Harmony: 5, Discord: 5 };
+    const otherType = type === "Harmony" ? "Discord" : "Harmony";
+
+    // Apply delta
     pool[type] = Math.max(0, pool[type] + delta);
+
+    // Enforce total of 10
+    const total = pool.Harmony + pool.Discord;
+    if (total < 10) {
+      pool[otherType] += 10 - total;
+    } else if (total > 10) {
+      pool[otherType] = Math.max(0, pool[otherType] - (total - 10));
+    }
+
     await game.settings.set("divine-thread-pool", "threadPoolCounts", pool);
     await this.showPool();
   }
